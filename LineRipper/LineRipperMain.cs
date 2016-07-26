@@ -10,14 +10,21 @@
 
 	public static class LineRipperMain
 	{
-		public static void Main()
+		public static void Main(string[] args)
 		{
 			var stickerClass = "mdCMN09Image";
 
-			Console.Write("Paste the link to the sticker pack on the LINE website: ");
+			string url;
+			if (args.Length < 1)
+			{
+				Console.Write("Paste the link to the sticker pack on the LINE website: ");
+				url = Console.ReadLine();
+			}
+			else
+			{
+				url = args[0];
+			}
 
-			var url = Console.ReadLine();
-			
 			const string IdRegex = @"https:\/\/store\.line\.me\/stickershop\/product\/(?<id>\d+)\/en";
 			var id = Regex.Match(url, IdRegex).Groups["id"].Value;
 
