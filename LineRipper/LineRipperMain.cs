@@ -54,15 +54,18 @@
 					.Select(a => a.Attributes[2].Value)
 					.ToArray();
 
-			const string downloadUrl = "https://sdl-stickershop.line.naver.jp/products/0/0/1/{0}/android/stickers/{1}.png";
+			const string downloadUrlThumb = "https://sdl-stickershop.line.naver.jp/products/0/0/1/{0}/android/stickers/{1}.png";
+			const string downloadUrlPopup = "https://sdl-stickershop.line.naver.jp/products/0/0/2/{0}/android/popup/{1}.png";
 
 			for (var index = 0; index < stickerIds.Length; index++)
 			{
 				var stickerId = stickerIds[index];
 				using (var client = new WebClient())
 				{
-					var stickerUrl = string.Format(downloadUrl, id, stickerId);
-					client.DownloadFile(stickerUrl, outputPath + "\\" + stickerId + ".png");
+					var stickerUrlThumb = string.Format(downloadUrlThumb, id, stickerId);
+					client.DownloadFile(stickerUrlThumb, outputPath + "\\" + stickerId + "_thumb.png");
+					var stickerUrlPopup = string.Format(downloadUrlPopup, id, stickerId);
+					client.DownloadFile(stickerUrlPopup, outputPath + "\\" + stickerId + "_popup.png");
 				}
 
 				Console.Write("\r" + $"{index+1}/{stickerIds.Length} downloaded.");
