@@ -45,7 +45,7 @@
 
 			Console.WriteLine("Name: " + name);
 
-			var outputPath = "stickers\\" + name;
+			var outputPath = "stickers\\" + Utilities.RemoveInvalidPathChars(name);
 			Directory.CreateDirectory(outputPath);
 
 			var stickerIds =
