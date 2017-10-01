@@ -7,13 +7,15 @@
 	using System.Text.RegularExpressions;
 
 	using HtmlAgilityPack;
+	using System.Threading.Tasks;
 
 	public static class LineRipperMain
 	{
 		public static void Main(string[] args)
 		{
-			var stickerClass = "mdCMN09Image";
-
+#if DEBUG
+			args = new string[] { "https://store.line.me/stickershop/product/1602439/en" };
+#endif
 			string url;
 			if (args.Length < 1)
 			{
@@ -25,8 +27,8 @@
 				url = args[0];
 			}
 
-			const string IdRegex = @"https:\/\/store\.line\.me\/stickershop\/product\/(?<id>\d+)\/en";
-			var id = Regex.Match(url, IdRegex).Groups["id"].Value;
+			//const string IdRegex = @"https:\/\/store\.line\.me\/stickershop\/product\/(?<id>\d+)\/en";
+			//var id = Regex.Match(url, IdRegex).Groups["id"].Value;
 
 			string siteData;
 			using (var client = new WebClient())
@@ -37,42 +39,89 @@
 			var doc = new HtmlDocument();
 			doc.LoadHtml(siteData);
 
-			const string nameId = "mdCMN08Ttl";
+			var stickerPackName = GetStickerPackName(doc);
 
-			var name =
-				doc.DocumentNode
-					.Descendants("h3").First(a => a.Attributes.Contains("class") && a.Attributes["class"].Value == nameId).InnerText;
+			Console.WriteLine("Name: " + stickerPackName);
 
-			Console.WriteLine("Name: " + name);
-
-			var outputPath = "stickers\\" + Utilities.RemoveInvalidPathChars(name);
+			var outputPath = "stickers\\" + Utilities.RemoveInvalidPathChars(stickerPackName);
 			Directory.CreateDirectory(outputPath);
 
-			var stickerIds =
-				doc.DocumentNode.Descendants("span")
-					.Where(a => a.Attributes.Contains("class") && a.Attributes["class"].Value == stickerClass)
-					.Select(a => a.Attributes[2].Value)
-					.ToArray();
+			var stickerUrls = GetStickerUrls(doc);
 
-			const string downloadUrlThumb = "https://sdl-stickershop.line.naver.jp/products/0/0/1/{0}/android/stickers/{1}.png";
-			const string downloadUrlPopup = "https://sdl-stickershop.line.naver.jp/products/0/0/2/{0}/android/popup/{1}.png";
+			var counter = 0;
 
-			for (var index = 0; index < stickerIds.Length; index++)
+
+			Parallel.For(0, stickerUrls.Length, index =>
 			{
-				var stickerId = stickerIds[index];
+				var stickerUrl = stickerUrls[index];
 				using (var client = new WebClient())
 				{
-					var stickerUrlThumb = string.Format(downloadUrlThumb, id, stickerId);
-					client.DownloadFile(stickerUrlThumb, outputPath + "\\" + stickerId + "_thumb.png");
-					var stickerUrlPopup = string.Format(downloadUrlPopup, id, stickerId);
-					client.DownloadFile(stickerUrlPopup, outputPath + "\\" + stickerId + "_popup.png");
+					var fileName = $@"{outputPath}\{index + 1}.png";
+					client.DownloadFile(stickerUrl, fileName);
 				}
+				Console.Write("\r" + $"{++counter}/{stickerUrls.Length} downloaded.");
+			});
 
-				Console.Write("\r" + $"{index+1}/{stickerIds.Length} downloaded.");
-			}
+
 			Console.WriteLine();
 
 			Console.WriteLine("Done!");
+		}
+
+		private static string GetStickerPackName(HtmlDocument doc)
+		{
+			const string nameId = "mdCMN08Ttl";
+
+			var headings = doc.DocumentNode
+				.Descendants("h3")
+				.ToArray();
+
+			var heading = headings
+				.First(a => a.Attributes.Contains("class") && a.Attributes["class"].Value == nameId);
+
+			var name = heading.InnerText;
+
+			return name;
+		}
+
+		private static string[] GetStickerUrls(HtmlDocument doc)
+		{
+			const string stickerClass = "mdCMN09Image";
+
+			var stickerUrls = doc.DocumentNode.Descendants("span")
+				.Where(a => a.Attributes.Contains("class") && a.Attributes["class"].Value == stickerClass)
+				.Select(node => ParseUrl(node))
+				.ToArray();
+
+			return stickerUrls;
+		}
+
+		private static string ParseUrl(HtmlNode node)
+		{
+			string attributeValue = GetStyleAttributeValue(node);
+
+			string url = ParseStyleString(attributeValue);
+
+			return url;
+		}
+
+		private static string GetStyleAttributeValue(HtmlNode node)
+		{
+			var attributes = node.Attributes;
+
+			var styleAttribute = attributes.FirstOrDefault(attr => attr.Name == "style");
+
+			return styleAttribute.Value;
+		}
+
+		private static string ParseStyleString(string style)
+		{
+			var pattern = @"background-image:url\((?<link>.+?);.*\)";
+
+			var match = Regex.Match(style, pattern);
+			var link = match.Groups["link"].Value;
+
+			return link;
 		}
 	}
 }
