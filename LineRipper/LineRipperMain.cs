@@ -8,64 +8,95 @@
 
 	using HtmlAgilityPack;
 	using System.Threading.Tasks;
+	using ImageMagick;
 
 	public static class LineRipperMain
 	{
 		public static void Main(string[] args)
 		{
-#if DEBUG
-			args = new string[] { "https://store.line.me/stickershop/product/1602439/en" };
-#endif
-			string url;
-			if (args.Length < 1)
-			{
-				Console.Write("Paste the link to the sticker pack on the LINE website: ");
-				url = Console.ReadLine();
-			}
-			else
-			{
-				url = args[0];
-			}
+			Console.Write("Paste the link to the sticker pack on the LINE website: ");
+			var url = Console.ReadLine();
 
-			//const string IdRegex = @"https:\/\/store\.line\.me\/stickershop\/product\/(?<id>\d+)\/en";
-			//var id = Regex.Match(url, IdRegex).Groups["id"].Value;
+			Console.Write("Should the images be resized to Telegram sticker size (512px)? (y/n): ");
+			var shouldResize = Console.ReadLine().Equals("y", StringComparison.InvariantCultureIgnoreCase);
 
-			string siteData;
+			Console.WriteLine("------------------");
+			Console.WriteLine("Downloading Stickers");
+			string siteHtml;
 			using (var client = new WebClient())
 			{
-				siteData = client.DownloadString(url);
+				siteHtml = client.DownloadString(url);
 			}
 
-			var doc = new HtmlDocument();
-			doc.LoadHtml(siteData);
+			var htmlDoc = new HtmlDocument();
+			htmlDoc.LoadHtml(siteHtml);
 
-			var stickerPackName = GetStickerPackName(doc);
+			var stickerPackName = GetStickerPackName(htmlDoc);
 
-			Console.WriteLine("Name: " + stickerPackName);
+			Console.WriteLine($"Name: {stickerPackName}");
+			var outputPath = CreateOutputDirectory(stickerPackName);
 
-			var outputPath = "stickers\\" + Utilities.RemoveInvalidPathChars(stickerPackName);
-			Directory.CreateDirectory(outputPath);
+			var stickerUrls = GetStickerUrls(htmlDoc);
 
-			var stickerUrls = GetStickerUrls(doc);
+			var downloadedStickers = 0;
 
-			var counter = 0;
-
-
+			// for (int index = 0; index < stickerUrls.Length; index++)
 			Parallel.For(0, stickerUrls.Length, index =>
 			{
 				var stickerUrl = stickerUrls[index];
 				using (var client = new WebClient())
 				{
 					var fileName = $@"{outputPath}\{index + 1}.png";
-					client.DownloadFile(stickerUrl, fileName);
-				}
-				Console.Write("\r" + $"{++counter}/{stickerUrls.Length} downloaded.");
-			});
 
+					var bytes = client.DownloadData(stickerUrl);
+
+					if (shouldResize)
+					{
+						bytes = ResizeImage(bytes, 512);
+					}
+
+					File.WriteAllBytes(fileName, bytes);
+				}
+
+				Console.Write("\r" + $"{++downloadedStickers}/{stickerUrls.Length} downloaded.");
+			});
+			// }
 
 			Console.WriteLine();
+			Console.Write("Done! Press any key to exit. . .");
+			Console.ReadKey();
+		}
 
-			Console.WriteLine("Done!");
+		private static byte[] ResizeImage(byte[] bytes, int greaterDimensionPx)
+		{
+			var image = new MagickImage(bytes);
+
+			MagickGeometry geometry;
+			if (image.Width >= image.Height)
+			{
+				geometry = new MagickGeometry
+				{
+					Width = greaterDimensionPx,
+				};
+			}
+			else
+			{
+				geometry = new MagickGeometry
+				{
+					Height = 512,
+				};
+			}
+
+			image.Resize(geometry);
+
+			return image.ToByteArray();
+		}
+
+		private static string CreateOutputDirectory(string stickerPackName)
+		{
+			var outputPath = "stickers\\" + Utilities.RemoveInvalidPathChars(stickerPackName);
+			Directory.CreateDirectory(outputPath);
+			return outputPath;
 		}
 
 		private static string GetStickerPackName(HtmlDocument doc)
